@@ -23,6 +23,7 @@ export default function Home() {
   const navigation = useNavigation();
   const [quizes, setQuizes] = useState([]);
   const [quizList, setQuizList] = useState(3);
+  const [avgScore, setAvgScore] = useState(null);
 
   const { gradientUp, setGradientUp, gradientDown, setGradientDown, changeTheme, roleSelected, setRoleSelected } = useContext(ThemeContext);
 
@@ -34,6 +35,7 @@ export default function Home() {
         const parsedUser = JSON.parse(storedUser);
         setUser(parsedUser);
         loadQuizes(parsedUser.username);
+        loadAvgScore(parsedUser.username);
       }
     };
     loadUser();
@@ -48,6 +50,17 @@ export default function Home() {
       else {
         setQuizes(res.data.data);
         console.log("Quizes Found");
+      }
+    } catch (error) {
+      console.log(error);
+    }
+  }
+
+  const loadAvgScore = async (username) => {
+    try {
+      const res = await axios.post(api + "/api/Quiz/get-teacher-avg-score", { username });
+      if (res.data.status === 'OK') {
+        setAvgScore(res.data.data.avgScore);
       }
     } catch (error) {
       console.log(error);
@@ -71,7 +84,7 @@ export default function Home() {
   return (
 
     <LinearGradient
-      colors={[gradientUp, gradientDown]} // teal-blue → purple
+      colors={[gradientUp, gradientDown]} // teal-blue â†’ purple
       start={{ x: 0, y: 0 }}           // top
       end={{ x: 0, y: 1 }}             // bottom
       style={{ flex: 1 }}
@@ -115,7 +128,7 @@ export default function Home() {
               <View style={[styles.insightsButton, { backgroundColor: '#c3371eff' }]}>
                 <View>
                   <Text style={[styles.insightsButtonText, { fontWeight: 500, }]}>Avg Score</Text>
-                  <Text style={[styles.insightsButtonText, { fontWeight: 900, fontSize: hp(3) }]}>77 %</Text>
+                  <Text style={[styles.insightsButtonText, { fontWeight: 900, fontSize: hp(3) }]}>{avgScore !== null ? avgScore + ' %' : 'N/A'}</Text>
                 </View>
 
                 <View>
@@ -148,7 +161,7 @@ export default function Home() {
 
     <Text style={styles.flatlistText}>{item.subject}</Text>
     <Text style={styles.flatlistText}>{item.difficulty}</Text>
-    <Text style={styles.flatlistText}>Avg Score: 85%</Text>
+    <Text style={styles.flatlistText}>Avg Score: {item.avgScore !== null && item.avgScore !== undefined ? item.avgScore + '%' : 'N/A'}</Text>
   </View>
 
   <View style={styles.rightContainer}>
@@ -156,7 +169,7 @@ export default function Home() {
       {item.totalAttempts} Attempts
     </Text>
 
-    <TouchableOpacity style={styles.flatlistButton}>
+    <TouchableOpacity style={styles.flatlistButton} onPress={() => navigation.navigate('Quiz_Details_Teacher', { user: user, quizID: item.id })}>
       <Text>View Details</Text>
     </TouchableOpacity>
   </View>

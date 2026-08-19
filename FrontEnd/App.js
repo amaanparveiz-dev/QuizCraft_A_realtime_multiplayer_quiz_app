@@ -7,6 +7,7 @@ import Teacher_Home from './screens/teacher/Home.js';
 import Quiz_Attempt from './screens/student/QuizAttempt.js';
 import Quiz_Create from './screens/teacher/QuizCreate.js';
 import Quiz_Details_Student from './screens/student/QuizDetails.js';
+import Quiz_Details_Teacher from './screens/teacher/QuizDetails.js';
 import Live_Quiz from './screens/student/LiveQuiz.js';
 import { ThemeProvider } from './Context/ThemeContext.js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -48,6 +49,7 @@ function AppNavigator() {
         <Stack.Screen name='Quiz_Attempt' component={Quiz_Attempt}/>
         <Stack.Screen name='Quiz_Create' component={Quiz_Create}/>
         <Stack.Screen name='Quiz_Details_Student' component={Quiz_Details_Student}/>
+        <Stack.Screen name='Quiz_Details_Teacher' component={Quiz_Details_Teacher}/>
         <Stack.Screen name='Live_Quiz' component={Live_Quiz}/>
 
       </Stack.Navigator>

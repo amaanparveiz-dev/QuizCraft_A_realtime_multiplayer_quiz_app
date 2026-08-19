@@ -22,6 +22,7 @@ export default function Home() {
   const navigation = useNavigation();
   const [quizes, setQuizes] = useState([]);
   const [quizList, setQuizList] = useState(3);
+  const [avgScore, setAvgScore] = useState(null);
 
   const { gradientUp, setGradientUp, gradientDown, setGradientDown, changeTheme, roleSelected, setRoleSelected } = useContext(ThemeContext);
 
@@ -36,6 +37,7 @@ export default function Home() {
         const parsedUser = JSON.parse(storedUser);
         setUser(parsedUser);
         loadQuizes(parsedUser.username);
+        loadAvgScore(parsedUser.username);
       }
     };
     loadUser();
@@ -50,6 +52,17 @@ export default function Home() {
 
         setQuizes(res.data.data);
         console.log("Quizes Found");
+      } catch (error) {
+        console.log(error);
+      }
+    }
+
+    const loadAvgScore = async (username) => {
+      try {
+        const res = await axios.post(api + "/api/QuizAttempt/get-student-avg-score", { username });
+        if (res.data.status === 'OK') {
+          setAvgScore(res.data.data.avgScore);
+        }
       } catch (error) {
         console.log(error);
       }
@@ -141,7 +154,7 @@ export default function Home() {
               <View style={[styles.insightsButton, { backgroundColor: '#c3371eff' }]}>
                 <View>
                   <Text style={[styles.insightsButtonText, { fontWeight: 500, }]}>Avg Score</Text>
-                  <Text style={[styles.insightsButtonText, { fontWeight: 900, fontSize: hp(3) }]}>77 %</Text>
+                  <Text style={[styles.insightsButtonText, { fontWeight: 900, fontSize: hp(3) }]}>{avgScore !== null ? avgScore + ' %' : 'N/A'}</Text>
                 </View>
 
                 <View>
@@ -174,7 +187,7 @@ export default function Home() {
 
     <Text style={styles.flatlistText}>{item.subject}</Text>
     <Text style={styles.flatlistText}>{item.difficulty}</Text>
-    <Text style={styles.flatlistText}>Avg Score: 85%</Text>
+    <Text style={styles.flatlistText}>Avg Score: {item.avgScore !== null && item.avgScore !== undefined ? item.avgScore + '%' : 'N/A'}</Text>
   </View>
 
   <View style={styles.rightContainer}>
@@ -201,6 +214,26 @@ export default function Home() {
               <Text style={styles.viewAll}>{quizList === 3 ? 'View All' : 'View Less'}</Text>
             </TouchableOpacity>
           </View>
+
+
+
+
+
+          <View style={[styles.FormContainer]}>
+            <Text style={styles.FormContainerText}>Quick Actions</Text>
+            <View style={{ flexDirection: 'row', alignSelf: 'center', justifyContent: 'center' }}>
+              <TouchableOpacity style={styles.quickActionsButton} onPress={() => navigation.replace('Quiz_Create')}>
+                <Ionicons name="add" size={wp('6%')} color="black" style={styles.quickActionsIcon} />
+                <Text style={{ fontSize: hp(2.2), fontWeight: 500 }}>Create Quiz</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.quickActionsButton}>
+                <Ionicons name="analytics" size={wp('6%')} color="black" style={styles.quickActionsIcon} />
+                <Text style={{ fontSize: hp(2.2), fontWeight: 500 }}>Analytics</Text>
+              </TouchableOpacity>
+            </View>
+
+          </View>
+
 
 
 

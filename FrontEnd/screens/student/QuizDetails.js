@@ -161,8 +161,8 @@ export default function QuizDetails({ route }) {
                             <Ionicons name="stats-chart-outline" size={wp('6%')} color="#2dec43ff" />
                             <Text style={styles.statLabel}>Avg Score</Text>
                             <Text style={styles.statValue}>
-                                {quiz.totalAttempts
-                                    ? Math.round((quiz.marks / quiz.totalQuestions) * 100) + '%'
+                                {quiz.avgScore !== null && quiz.avgScore !== undefined
+                                    ? quiz.avgScore + '%'
                                     : 'N/A'}
                             </Text>
                         </View>

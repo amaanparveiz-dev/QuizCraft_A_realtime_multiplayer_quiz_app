@@ -117,8 +117,45 @@ const saveAnswer = async (req, res) => {
 };
 
 
+// Average score (%) across every quiz a student has attempted
+const getStudentAvgScore = async (req, res) => {
+  const { username } = req.body;
+
+  if (!username) {
+    return res.json({ status: "Error", data: "Username is required" });
+  }
+
+  try {
+    const attempts = await QuizAttempt.find({ attemptedBy: username });
+
+    if (!attempts || attempts.length === 0) {
+      return res.json({ status: "OK", data: { avgScore: null } });
+    }
+
+    const quizIds = [...new Set(attempts.map(a => a.id))];
+    const quizzes = await Quiz.find({ id: { $in: quizIds } }, { id: 1, totalQuestions: 1 });
+
+    const totalQuestionsById = {};
+    quizzes.forEach(q => { totalQuestionsById[q.id] = q.totalQuestions; });
+
+    const totalPercent = attempts.reduce((sum, a) => {
+      const totalQuestions = totalQuestionsById[a.id] || 1;
+      return sum + ((a.score || 0) / totalQuestions) * 100;
+    }, 0);
+
+    const avgScore = Math.round(totalPercent / attempts.length);
+
+    res.json({ status: "OK", data: { avgScore } });
+  } catch (error) {
+    console.error("Error computing student avg score:", error);
+    res.json({ status: "Error", data: error.message });
+  }
+};
+
+
 module.exports = {
   startQuiz,
   loadQuestion,
   saveAnswer,
+  getStudentAvgScore,
 };
