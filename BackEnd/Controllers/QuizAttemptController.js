@@ -19,7 +19,7 @@ const startQuiz = async (req, res) => {
     const quizId = Number(id); // convert to Number to match schema
 
     // Create the quiz attempt
-    await QuizAttempt.create({
+    const attempt = await QuizAttempt.create({
       id: quizId,
       attemptedBy,
     });
@@ -37,7 +37,10 @@ const startQuiz = async (req, res) => {
 
     console.log("Updated Quiz:", updatedQuiz);
 
-    res.send({ status: "OK", data: "Quiz Started" });
+    // Return the attempt's own unique id so the frontend can reference
+    // this exact attempt going forward, instead of {id, attemptedBy}
+    // which is ambiguous once a student retakes a quiz.
+    res.send({ status: "OK", data: "Quiz Started", attemptId: attempt._id });
   } catch (error) {
     console.error("Error in startQuiz:", error);
     res.send({ status: "Error", data: error });
@@ -46,7 +49,7 @@ const startQuiz = async (req, res) => {
 
 
 const loadQuestion = async (req, res) => {
-  const { id, index, attemptedBy } = req.body;
+  const { id, index, attemptId } = req.body;
 
   try {
     const quiz = await Quiz.findOne({ id });
@@ -59,8 +62,8 @@ const loadQuestion = async (req, res) => {
     if (!quiz.questions || index >= quiz.questions.length) {
       let score = 0;
 
-      if (attemptedBy) {
-        const attempt = await QuizAttempt.findOne({ id: Number(id), attemptedBy });
+      if (attemptId) {
+        const attempt = await QuizAttempt.findById(attemptId);
         score = attempt ? attempt.score : 0;
       }
 
@@ -87,10 +90,14 @@ const loadQuestion = async (req, res) => {
 };
 
 const saveAnswer = async (req, res) => {
-  const { id, attemptedBy, choice, index, correctChoice } = req.body;
+  const { attemptId, choice, index, correctChoice } = req.body;
 
   try {
-    const quizattempt = await QuizAttempt.findOne({ id, attemptedBy });
+    if (!attemptId) {
+      return res.json({ status: "Error", message: "Missing attemptId" });
+    }
+
+    const quizattempt = await QuizAttempt.findById(attemptId);
 
     if (!quizattempt) {
       return res.json({ status: "Error", message: "Quiz attempt not found" });
@@ -100,9 +107,13 @@ const saveAnswer = async (req, res) => {
       quizattempt.answers = [];
     }
 
+    // Only count the answer once per question, even if saveAnswer is
+    // somehow called twice for the same index (e.g. a retried request).
+    const alreadyAnswered = quizattempt.answers[index] !== undefined && quizattempt.answers[index] !== null;
+
     quizattempt.answers[index] = choice;
 
-    if (choice === correctChoice) {
+    if (!alreadyAnswered && choice === correctChoice) {
       quizattempt.score = (quizattempt.score || 0) + 1;
     }
 

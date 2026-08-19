@@ -76,12 +76,13 @@ export default function Home() {
       attemptedBy:user.username,
     }
     try {
-      await axios.post(api + "/api/QuizAttempt/start-quiz" , attemptData);
+      const res = await axios.post(api + "/api/QuizAttempt/start-quiz" , attemptData);
         navigation.replace("Quiz_Attempt" , {
                     id:quiz.id,
                     user: user.username,
                     totalQuestions:quiz.totalQuestions,
                     time: quiz.time,
+                    attemptId: res.data.attemptId,
 
                 })  
               
@@ -214,27 +215,6 @@ export default function Home() {
               <Text style={styles.viewAll}>{quizList === 3 ? 'View All' : 'View Less'}</Text>
             </TouchableOpacity>
           </View>
-
-
-
-
-
-          <View style={[styles.FormContainer]}>
-            <Text style={styles.FormContainerText}>Quick Actions</Text>
-            <View style={{ flexDirection: 'row', alignSelf: 'center', justifyContent: 'center' }}>
-              <TouchableOpacity style={styles.quickActionsButton} onPress={() => navigation.replace('Quiz_Create')}>
-                <Ionicons name="add" size={wp('6%')} color="black" style={styles.quickActionsIcon} />
-                <Text style={{ fontSize: hp(2.2), fontWeight: 500 }}>Create Quiz</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.quickActionsButton}>
-                <Ionicons name="analytics" size={wp('6%')} color="black" style={styles.quickActionsIcon} />
-                <Text style={{ fontSize: hp(2.2), fontWeight: 500 }}>Analytics</Text>
-              </TouchableOpacity>
-            </View>
-
-          </View>
-
-
 
 
           <View style={{ flexDirection: 'row', alignSelf: 'center' }}>

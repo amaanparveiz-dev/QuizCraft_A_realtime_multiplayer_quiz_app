@@ -41,12 +41,13 @@ export default function QuizDetails({ route }) {
             attemptedBy: user.username,
         }
         try {
-            await axios.post(api + "/api/QuizAttempt/start-quiz", attemptData);
+            const res = await axios.post(api + "/api/QuizAttempt/start-quiz", attemptData);
             navigation.replace("Quiz_Attempt", {
                 id: quiz.id,
                 user: user.username,
                 totalQuestions: quiz.totalQuestions,
                 time: quiz.time,
+                attemptId: res.data.attemptId,
 
             })
 

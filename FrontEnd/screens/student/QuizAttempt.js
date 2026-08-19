@@ -14,7 +14,7 @@ import * as Haptics from 'expo-haptics';
 export default function QuizAttempt({ route }) {
 
     // Removed 'duration' as we are now using fixed 10s per question
-    const { id, user, totalQuestions, time } = route.params;
+    const { id, user, totalQuestions, time, attemptId } = route.params;
 
     const [question, setQuestion] = useState("");
     const [choices, setChoices] = useState([]);
@@ -68,7 +68,7 @@ export default function QuizAttempt({ route }) {
             const res = await axios.post(api + "/api/quizAttempt/load-question", {
                 id,
                 index,
-                attemptedBy: user
+                attemptId
             });
 
             if (!res.data || res.data.finished || !res.data.question) {
@@ -101,8 +101,7 @@ export default function QuizAttempt({ route }) {
 
         try {
             await axios.post(api + "/api/quizAttempt/save-answer", {
-                id,
-                attemptedBy: user,
+                attemptId,
                 choice: choiceIndex,
                 index,
                 correctChoice
