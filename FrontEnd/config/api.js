@@ -1,3 +1,3 @@
-export const api = "http://192.168.1.109:5001";
+export const api = "http://192.168.100.114:5001";
 
 export default api;

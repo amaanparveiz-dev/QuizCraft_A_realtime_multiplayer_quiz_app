@@ -25,6 +25,7 @@ export default function QuizAttempt({ route }) {
     // --- TIMER STATE (Per Question) ---
     const [timeLeft, setTimeLeft] = useState(time);
     const [isQuizFinished, setIsQuizFinished] = useState(false);
+    const [finalScore, setFinalScore] = useState(null);
 
     const navigation = useNavigation();
     const { gradientUp, gradientDown } = useContext(ThemeContext);
@@ -66,13 +67,15 @@ export default function QuizAttempt({ route }) {
         try {
             const res = await axios.post(api + "/api/quizAttempt/load-question", {
                 id,
-                index
+                index,
+                attemptedBy: user
             });
 
-            if (!res.data || !res.data.question) {
+            if (!res.data || res.data.finished || !res.data.question) {
                 setQuestion("Quiz Completed!");
                 setChoices([]);
                 setIsQuizFinished(true);
+                setFinalScore(res.data && typeof res.data.score === "number" ? res.data.score : null);
             } else {
                 setQuestion(res.data.question);
                 setChoices(res.data.choices || []);
@@ -191,9 +194,16 @@ export default function QuizAttempt({ route }) {
                                     </TouchableOpacity>
                                 ))
                             ) : (
-                                <Text style={styles.infoText}>
-                                    {question === "Quiz Completed!" ? "You have finished the quiz." : ""}
-                                </Text>
+                                <View style={{ alignItems: 'center' }}>
+                                    <Text style={styles.infoText}>
+                                        {question === "Quiz Completed!" ? "You have finished the quiz." : ""}
+                                    </Text>
+                                    {question === "Quiz Completed!" && finalScore !== null && (
+                                        <Text style={[styles.infoText, { fontSize: hp(3), fontWeight: 'bold', marginTop: hp(1.5) }]}>
+                                            Your Score: {finalScore} / {totalQuestions}
+                                        </Text>
+                                    )}
+                                </View>
                             )}
                         </View>
 

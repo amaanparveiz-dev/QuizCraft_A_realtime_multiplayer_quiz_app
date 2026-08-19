@@ -46,13 +46,30 @@ const startQuiz = async (req, res) => {
 
 
 const loadQuestion = async (req, res) => {
-  const { id, index } = req.body;
+  const { id, index, attemptedBy } = req.body;
 
   try {
     const quiz = await Quiz.findOne({ id });
 
     if (!quiz) {
       return res.json({ status: "NO", data: "Quiz Not Found" });
+    }
+
+    // No more questions left -> quiz is finished, send back the final score
+    if (!quiz.questions || index >= quiz.questions.length) {
+      let score = 0;
+
+      if (attemptedBy) {
+        const attempt = await QuizAttempt.findOne({ id: Number(id), attemptedBy });
+        score = attempt ? attempt.score : 0;
+      }
+
+      return res.json({
+        status: "OK",
+        finished: true,
+        score,
+        totalQuestions: quiz.questions.length
+      });
     }
 
     res.json({

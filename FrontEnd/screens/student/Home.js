@@ -96,7 +96,7 @@ export default function Home() {
   return (
 
     <LinearGradient
-      colors={[gradientUp, gradientDown]} // teal-blue → purple
+      colors={[gradientUp, gradientDown]} // teal-blue â†’ purple
       start={{ x: 0, y: 0 }}           // top
       end={{ x: 0, y: 1 }}             // bottom
       style={{ flex: 1 }}
@@ -161,7 +161,7 @@ export default function Home() {
               scrollEnabled={false}
               renderItem={({ item }) => (
                 
-<TouchableOpacity onPress={() => navigation.replace("Live_Quiz", { user: user })}>
+<TouchableOpacity onPress={() => navigation.navigate("Live_Quiz", { user: user })}>
   <View style={styles.flatlistContainer}>
   <View style={styles.leftContainer}>
     <Text
@@ -201,26 +201,6 @@ export default function Home() {
               <Text style={styles.viewAll}>{quizList === 3 ? 'View All' : 'View Less'}</Text>
             </TouchableOpacity>
           </View>
-
-
-
-
-
-          <View style={[styles.FormContainer]}>
-            <Text style={styles.FormContainerText}>Quick Actions</Text>
-            <View style={{ flexDirection: 'row', alignSelf: 'center', justifyContent: 'center' }}>
-              <TouchableOpacity style={styles.quickActionsButton} onPress={() => navigation.replace('Quiz_Create')}>
-                <Ionicons name="add" size={wp('6%')} color="black" style={styles.quickActionsIcon} />
-                <Text style={{ fontSize: hp(2.2), fontWeight: 500 }}>Create Quiz</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.quickActionsButton}>
-                <Ionicons name="analytics" size={wp('6%')} color="black" style={styles.quickActionsIcon} />
-                <Text style={{ fontSize: hp(2.2), fontWeight: 500 }}>Analytics</Text>
-              </TouchableOpacity>
-            </View>
-
-          </View>
-
 
 
 
