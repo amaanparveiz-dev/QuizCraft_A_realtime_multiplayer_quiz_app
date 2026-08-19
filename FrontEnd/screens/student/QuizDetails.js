@@ -175,6 +175,17 @@ export default function QuizDetails({ route }) {
                         <Text style={{ fontSize: hp('2%'), fontWeight: '600', color: '#020101ff' }}>Attempt Quiz</Text>
                     </TouchableOpacity>
 
+                    {/* Live Quiz Button */}
+                    <TouchableOpacity
+                        style={[styles.Button, { marginTop: hp('1.5'), backgroundColor: '#FF9800', borderStyle: 'solid', borderWidth: hp(0.05), borderColor: '#787777ff' }]}
+                        onPress={() => navigation.navigate('Live_Quiz', { user: user, quizID: quiz.id })}
+                    >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                            <Ionicons name="flash" size={wp('5%')} color="#fff" style={{ marginRight: wp('2%') }} />
+                            <Text style={{ fontSize: hp('2%'), fontWeight: '600', color: '#fff' }}>Play Live (This Quiz)</Text>
+                        </View>
+                    </TouchableOpacity>
+
                 </View>
             </ScrollView>
         </LinearGradient>

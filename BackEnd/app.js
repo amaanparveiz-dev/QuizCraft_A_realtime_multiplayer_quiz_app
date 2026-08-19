@@ -47,52 +47,68 @@ const io = new Server(server, {
 // ----------------------
 // Socket.IO Logic
 // ----------------------
-let waitingPlayer = null;
+let waitingQueues = new Map(); // key: quizID (as string) or "any" -> waiting player
 const activeMatches = new Map();
 const playerAnswers = new Map();
 
 io.on("connection", (socket) => {
-  console.log("✅ User connected:", socket.id);
+  console.log("User connected:", socket.id);
 
   // Join match queue
-  socket.on("joinMatch", async ({ username }) => {
+  socket.on("joinMatch", async ({ username, quizID }) => {
     try {
-      console.log(`🎮 Join match request from: ${username}`);
-      
+      console.log(`Join match request from: ${username} (quizID: ${quizID || 'any'})`);
+
+      const queueKey = quizID !== undefined && quizID !== null ? String(quizID) : "any";
+      const waitingPlayer = waitingQueues.get(queueKey);
+
       // Clean up if already waiting
       if (waitingPlayer && waitingPlayer.socketId === socket.id) {
         socket.emit("waiting", { message: "Already waiting for opponent..." });
         return;
       }
-      
+
       if (waitingPlayer && waitingPlayer.socketId !== socket.id) {
         // Found an opponent!
         const opponent = waitingPlayer;
-        
-        // Get random quiz
-        const quizList = await Quiz.find();
-        if (quizList.length === 0) {
-          socket.emit("error", { message: "No quizzes available" });
-          const opponentSocket = io.sockets.sockets.get(opponent.socketId);
-          if (opponentSocket) {
-            opponentSocket.emit("error", { message: "No quizzes available" });
+        waitingQueues.delete(queueKey);
+
+        // Pick the specific quiz that was requested, or fall back to a
+        // random one if this is a general (non quiz-specific) match request.
+        let selectedQuiz;
+        if (queueKey !== "any") {
+          selectedQuiz = await Quiz.findOne({ id: Number(queueKey) });
+          if (!selectedQuiz) {
+            socket.emit("error", { message: "Quiz not found" });
+            const opponentSocket = io.sockets.sockets.get(opponent.socketId);
+            if (opponentSocket) {
+              opponentSocket.emit("error", { message: "Quiz not found" });
+            }
+            return;
           }
-          waitingPlayer = null;
-          return;
+        } else {
+          const quizList = await Quiz.find();
+          if (quizList.length === 0) {
+            socket.emit("error", { message: "No quizzes available" });
+            const opponentSocket = io.sockets.sockets.get(opponent.socketId);
+            if (opponentSocket) {
+              opponentSocket.emit("error", { message: "No quizzes available" });
+            }
+            return;
+          }
+          selectedQuiz = quizList[Math.floor(Math.random() * quizList.length)];
         }
-        
-        const randomQuiz = quizList[Math.floor(Math.random() * quizList.length)];
         
         const matchID = `match-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         
-        console.log(`🤝 Match created: ${matchID} between ${opponent.username} and ${username}`);
+        console.log(`Match created: ${matchID} between ${opponent.username} and ${username} on quiz "${selectedQuiz.title}"`);
         
         // Create match in database
         const newMatch = new Match({
           matchID: matchID,
           user1: opponent.username,
           user2: username,
-          quizID: randomQuiz.id,
+          quizID: selectedQuiz.id,
           user1Score: 0,
           user2Score: 0,
           status: "live",
@@ -118,17 +134,18 @@ io.on("connection", (socket) => {
         
         // Prepare quiz data
         const quizData = {
-          ...randomQuiz.toObject(),
+          ...selectedQuiz.toObject(),
           user1: opponent.username,
           user2: username,
-          time: randomQuiz.time || 30,
-          totalQuestions: randomQuiz.questions.length
+          time: selectedQuiz.time || 30,
+          totalQuestions: selectedQuiz.questions.length
         };
         
         // Initialize match state
         activeMatches.set(matchID, {
           players: [opponent.username, username],
           currentQuestion: 0,
+          questionEnded: false,
           quiz: quizData,
           room: room,
           match: newMatch
@@ -145,52 +162,76 @@ io.on("connection", (socket) => {
             [username]: 0
           }
         });
-        
-        waitingPlayer = null;
       } else {
-        // No opponent yet, become waiting player
-        waitingPlayer = {
+        // No opponent yet, become waiting player in this quiz's queue
+        waitingQueues.set(queueKey, {
           username,
           socketId: socket.id,
           joinedAt: Date.now()
-        };
+        });
+
+        socket.waitingQueueKey = queueKey;
         
-        console.log(`⏳ ${username} is waiting for opponent`);
+        console.log(`${username} is waiting for opponent (queue: ${queueKey})`);
         socket.emit("waiting", { message: "Waiting for opponent..." });
         
         // Timeout after 30 seconds
         const timeout = setTimeout(() => {
-          if (waitingPlayer && waitingPlayer.socketId === socket.id) {
-            console.log(`⏰ Timeout for ${username}`);
+          const stillWaiting = waitingQueues.get(queueKey);
+          if (stillWaiting && stillWaiting.socketId === socket.id) {
+            console.log(`Timeout for ${username}`);
             socket.emit("timeout", { message: "No opponent found. Please try again." });
-            waitingPlayer = null;
+            waitingQueues.delete(queueKey);
           }
         }, 30000);
         
         socket.waitingTimeout = timeout;
       }
     } catch (error) {
-      console.error("❌ Join match error:", error);
+      console.error("Join match error:", error);
       socket.emit("error", { message: "Server error joining match" });
-      waitingPlayer = null;
     }
   });
 
   // Handle answer submission - NEW LOGIC
   socket.on("answer", async ({ matchID, username, index, choice }) => {
     try {
-      console.log(`📝 Answer from ${username} for match ${matchID}, Q${index + 1}, choice: ${choice}`);
+      console.log(`Answer from ${username} for match ${matchID}, Q${index + 1}, choice: ${choice}`);
+
+      // Authoritative guard: the server, not the client, decides whether
+      // this answer is still valid. This protects against duplicate or
+      // late submissions (e.g. a client that briefly desynced) causing
+      // double-scoring or duplicate "next question" broadcasts.
+      const matchData = activeMatches.get(matchID);
+      if (!matchData) {
+        console.warn(`Ignoring answer for unknown/finished match ${matchID}`);
+        return;
+      }
+
+      if (index !== matchData.currentQuestion) {
+        console.warn(`Ignoring stale answer from ${username}: match is on Q${matchData.currentQuestion + 1}, answer was for Q${index + 1}`);
+        return;
+      }
+
+      if (matchData.questionEnded) {
+        console.warn(`Ignoring duplicate answer from ${username} for Q${index + 1} (already answered by someone this round)`);
+        return;
+      }
+
+      // Immediately mark this round as answered so a race between both
+      // players' answers can never be double-processed.
+      activeMatches.set(matchID, { ...matchData, questionEnded: true });
       
       const match = await Match.findOne({ matchID });
       if (!match) {
-        console.error(`❌ Match not found: ${matchID}`);
+        console.error(`Match not found: ${matchID}`);
         socket.emit("error", { message: "Match not found" });
         return;
       }
 
       const quiz = await Quiz.findOne({ id: match.quizID });
       if (!quiz) {
-        console.error(`❌ Quiz not found for match: ${matchID}`);
+        console.error(`Quiz not found for match: ${matchID}`);
         socket.emit("error", { message: "Quiz not found" });
         return;
       }
@@ -199,7 +240,7 @@ io.on("connection", (socket) => {
       const question = quiz.questions[index];
       
       if (!question) {
-        console.error(`❌ Question not found at index ${index} for match ${matchID}`);
+        console.error(`Question not found at index ${index} for match ${matchID}`);
         return;
       }
 
@@ -220,9 +261,9 @@ io.on("connection", (socket) => {
           match.user2Score += 1;
         }
         await match.save();
-        console.log(`✅ ${username} answered correctly! Score: ${username === match.user1 ? match.user1Score : match.user2Score}`);
+        console.log(`${username} answered correctly! Score: ${username === match.user1 ? match.user1Score : match.user2Score}`);
       } else {
-        console.log(`❌ ${username} answered incorrectly.`);
+        console.log(`${username} answered incorrectly.`);
       }
       
       // Send immediate feedback to the player who answered
@@ -238,7 +279,7 @@ io.on("connection", (socket) => {
         questionIndex: index,
         choice: choice,
         isCorrect: isCorrect,
-        questionEnded: true // NEW: Signal that question has ended
+        questionEnded: true
       });
       
       // Send updated scores
@@ -247,10 +288,7 @@ io.on("connection", (socket) => {
         user2Score: match.user2Score
       });
       
-      // IMMEDIATELY move to next question after ONE player answers
-      const matchData = activeMatches.get(matchID);
-      
-      console.log(`⚡ Question ${index + 1} ended after ${username}'s answer. Moving to next question...`);
+      console.log(`Question ${index + 1} ended after ${username}'s answer. Moving to next question...`);
       
       // Reset answers for next question
       playerAnswers.set(matchID, new Set());
@@ -259,8 +297,9 @@ io.on("connection", (socket) => {
       if (index + 1 < quiz.questions.length) {
         // Update active match state
         activeMatches.set(matchID, {
-          ...matchData,
-          currentQuestion: index + 1
+          ...activeMatches.get(matchID),
+          currentQuestion: index + 1,
+          questionEnded: false
         });
         
         // Wait 2 seconds then send next question (so players can see result)
@@ -272,7 +311,7 @@ io.on("connection", (socket) => {
               [match.user2]: match.user2Score
             }
           });
-          console.log(`➡️ Next question (${index + 2}) for match ${matchID}`);
+          console.log(`Next question (${index + 2}) for match ${matchID}`);
         }, 2000);
       } else {
         // Match finished
@@ -281,7 +320,7 @@ io.on("connection", (socket) => {
                       match.user2Score > match.user1Score ? match.user2 : "Draw";
         await match.save();
         
-        console.log(`🏁 Match ${matchID} finished. Winner: ${match.winner}`);
+        console.log(`Match ${matchID} finished. Winner: ${match.winner}`);
         
         // Wait 2 seconds then show results
         setTimeout(() => {
@@ -297,40 +336,43 @@ io.on("connection", (socket) => {
           setTimeout(() => {
             activeMatches.delete(matchID);
             playerAnswers.delete(matchID);
-            console.log(`🧹 Cleaned up match ${matchID}`);
+            console.log(`Cleaned up match ${matchID}`);
           }, 3000);
         }, 2000);
       }
     } catch (error) {
-      console.error("❌ Answer error:", error);
+      console.error("Answer error:", error);
       socket.emit("error", { message: "Error processing answer" });
     }
   });
 
   // Cancel waiting
   socket.on("cancelWaiting", () => {
-    if (waitingPlayer && waitingPlayer.socketId === socket.id) {
-      console.log(`❌ ${waitingPlayer.username} cancelled waiting`);
+    const key = socket.waitingQueueKey;
+    if (key && waitingQueues.has(key) && waitingQueues.get(key).socketId === socket.id) {
+      console.log(`${waitingQueues.get(key).username} cancelled waiting`);
       if (socket.waitingTimeout) {
         clearTimeout(socket.waitingTimeout);
         delete socket.waitingTimeout;
       }
-      waitingPlayer = null;
+      waitingQueues.delete(key);
+      delete socket.waitingQueueKey;
     }
   });
 
   // Disconnect handler
   socket.on("disconnect", () => {
-    console.log("🔌 User disconnected:", socket.id);
+    console.log("User disconnected:", socket.id);
     
     if (socket.waitingTimeout) {
       clearTimeout(socket.waitingTimeout);
       delete socket.waitingTimeout;
     }
     
-    if (waitingPlayer && waitingPlayer.socketId === socket.id) {
-      console.log(`👋 Waiting player ${waitingPlayer.username} disconnected`);
-      waitingPlayer = null;
+    const key = socket.waitingQueueKey;
+    if (key && waitingQueues.has(key) && waitingQueues.get(key).socketId === socket.id) {
+      console.log(`Waiting player ${waitingQueues.get(key).username} disconnected`);
+      waitingQueues.delete(key);
     }
     
     for (const [matchID, matchData] of activeMatches.entries()) {
@@ -339,7 +381,7 @@ io.on("connection", (socket) => {
           message: "Your opponent has disconnected. You win!" 
         });
         
-        console.log(`⚠️ Player disconnected from match ${matchID}`);
+        console.log(`Player disconnected from match ${matchID}`);
         
         activeMatches.delete(matchID);
         playerAnswers.delete(matchID);
@@ -349,5 +391,5 @@ io.on("connection", (socket) => {
 });
 
 server.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`Server running on port ${PORT}`);
 });
